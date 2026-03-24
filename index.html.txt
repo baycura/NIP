@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NOT IN PARIS</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080808;color:#F5F2EC;font-family:sans-serif;padding:20px}
+button{background:#F5F2EC;color:#080808;border:none;padding:12px 20px;font-size:16px;cursor:pointer;border-radius:3px;margin:5px;display:block;width:100%}
+#log{padding:10px;font-family:monospace;font-size:12px;line-height:2}
+</style>
+</head>
+<body>
+<h2 style="margin-bottom:20px;font-family:monospace">NIP TEST</h2>
+<div id="log">JS basladi mi?</div>
+<button onclick="document.getElementById('log').innerHTML+='<br>BUTON CALDI'">BUTON TEST</button>
+<script>
+document.getElementById('log').innerHTML = 'JS CALISIYOR';
+
+window.onload = function() {
+document.getElementById(‘log’).innerHTML += ‘<br>ONLOAD OK’;
+};
+</script>
+
+</body>
+</html>
