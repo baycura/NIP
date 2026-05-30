@@ -1,10 +1,10 @@
-const CACHE = ‘nip-v2’;
+const CACHE = 'nip-v2';
 
-self.addEventListener(‘install’, e => {
+self.addEventListener('install', e => {
 self.skipWaiting();
 });
 
-self.addEventListener(‘activate’, e => {
+self.addEventListener('activate', e => {
 e.waitUntil(
 caches.keys().then(keys =>
 Promise.all(keys.map(k => caches.delete(k)))
@@ -13,25 +13,25 @@ Promise.all(keys.map(k => caches.delete(k)))
 self.clients.claim();
 });
 
-self.addEventListener(‘fetch’, e => {
+self.addEventListener('fetch', e => {
 // Just pass through - no caching interference
 return;
 });
 
-self.addEventListener(‘push’, e => {
+self.addEventListener('push', e => {
 const data = e.data ? e.data.json() : {};
 e.waitUntil(
-self.registration.showNotification(data.title || ‘NOT IN PARIS’, {
-body: data.body || ‘’,
-icon: ‘/NOTINPARIS/icon-192.png’,
-badge: ‘/NOTINPARIS/icon-192.png’,
+self.registration.showNotification(data.title || 'NOT IN PARIS', {
+body: data.body || '',
+icon: '/NOTINPARIS/icon-192.png',
+badge: '/NOTINPARIS/icon-192.png',
 vibrate: [200, 100, 200],
-data: data.url || ‘/NOTINPARIS/’,
+data: data.url || '/NOTINPARIS/',
 })
 );
 });
 
-self.addEventListener(‘notificationclick’, e => {
+self.addEventListener('notificationclick', e => {
 e.notification.close();
 e.waitUntil(clients.openWindow(e.notification.data));
 });
