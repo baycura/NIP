@@ -992,27 +992,25 @@ async function doNewPassword(){
 // ═══ REGISTER ═══
 var _refTimer=null,_refProfile=null,_cpRefProfile=null;
 
-function checkRef(v){
+// Shared referral-code validator. cfg: {okId, errId, set(profileOrNull), okText(data,lim,used), showInvalid}
+function _checkReferral(v, cfg){
   clearTimeout(_refTimer);
-  var ok=document.getElementById('refOk'),er=document.getElementById('refErr');
-  if(ok)ok.style.display='none';if(er)er.style.display='none';_refProfile=null;
+  var ok=document.getElementById(cfg.okId),er=document.getElementById(cfg.errId);
+  if(ok)ok.style.display='none';if(er)er.style.display='none';cfg.set(null);
   if(!v||v.length<10)return;
   _refTimer=setTimeout(async function(){
     var res=await _SB.from('profiles').select('id,name,referral_used,referral_limit').eq('referral_code',v).eq('status','approved').single();
-    if(res.data){var used=res.data.referral_used||0,lim=res.data.referral_limit||3;if(used>=lim){if(er){er.textContent='Bu referans kodunun hakkı dolmuş';er.style.display='block';}_refProfile=null;}else{_refProfile=res.data;if(ok){ok.textContent='✓ Referans: '+res.data.name+' ('+(lim-used)+' hak kaldı)';ok.style.display='block';}}}else{if(er){er.textContent='Geçersiz referans kodu';er.style.display='block';}}
+    if(res.data){
+      var used=res.data.referral_used||0,lim=res.data.referral_limit||3;
+      if(used>=lim){if(er){er.textContent='Bu referans kodunun hakkı dolmuş';er.style.display='block';}cfg.set(null);}
+      else{cfg.set(res.data);if(ok){ok.textContent=cfg.okText(res.data,lim,used);ok.style.display='block';}}
+    }else if(cfg.showInvalid&&er){er.textContent='Geçersiz referans kodu';er.style.display='block';}
   },400);
 }
 
-function checkRefCp(v){
-  clearTimeout(_refTimer);
-  var ok=document.getElementById('cpRefOk'),er=document.getElementById('cpRefErr');
-  if(ok)ok.style.display='none';if(er)er.style.display='none';_cpRefProfile=null;
-  if(!v||v.length<10)return;
-  _refTimer=setTimeout(async function(){
-    var res=await _SB.from('profiles').select('id,name,referral_used,referral_limit').eq('referral_code',v).eq('status','approved').single();
-    if(res.data){var used=res.data.referral_used||0,lim=res.data.referral_limit||3;if(used>=lim){if(er){er.textContent='Bu referans kodunun hakkı dolmuş';er.style.display='block';}_cpRefProfile=null;}else{_cpRefProfile=res.data;if(ok){ok.textContent='✓ '+res.data.name;ok.style.display='block';}}}
-  },400);
-}
+function checkRef(v){_checkReferral(v,{okId:'refOk',errId:'refErr',set:function(p){_refProfile=p;},okText:function(d,lim,used){return '✓ Referans: '+d.name+' ('+(lim-used)+' hak kaldı)';},showInvalid:true});}
+
+function checkRefCp(v){_checkReferral(v,{okId:'cpRefOk',errId:'cpRefErr',set:function(p){_cpRefProfile=p;},okText:function(d){return '✓ '+d.name;},showInvalid:false});}
 
 async function doRegister(){
   var name=val('regName').trim(),email=val('regEmail').toLowerCase().trim(),pw=val('regPw'),insta=val('regInsta').trim();
@@ -1340,42 +1338,48 @@ function rilChg(id,d){
   }
 }
 
-async function doResInline(id){
+// Shared reservation submit used by both list (ri) and calendar (cf) forms.
+// P=element id prefix, counts=guest-count map, onRulesFail(chk)=visual feedback,
+// onSuccess()=cleanup after a successful insert.
+async function _submitReservation(id,P,counts,onRulesFail,onSuccess){
   var e=State.events.find(function(x){return x.id===id;});if(!e)return;
   if(isMembersOnly(e)&&!userIsMember()){showMembersOnlyModal(e);return;}
   var isGuest=!State.session||!State.profile||State.profile.status!=='approved';
-  var name=(document.getElementById('ri-name-'+id)||{}).value||'';name=name.trim();
-  var cc=(document.getElementById('ri-cc-'+id)||{}).value||'+90';
-  var num=(document.getElementById('ri-phone-'+id)||{}).value||'';num=num.trim();
+  var name=(document.getElementById(P+'-name-'+id)||{}).value||'';name=name.trim();
+  var cc=(document.getElementById(P+'-cc-'+id)||{}).value||'+90';
+  var num=(document.getElementById(P+'-phone-'+id)||{}).value||'';num=num.trim();
   var phone=num?(cc+num):'';
   if(!name){toast('İsim zorunludur');return;}
   if(!phone){toast('Telefon zorunludur');return;}
-  var count=_rilCounts[id]||1;
-  var chk=document.getElementById('ri-check-'+id);
-  if(e.rules&&chk&&!chk.checked){
-    var rw=chk.closest('[style]');if(rw)rw.style.borderLeftColor='var(--red)';
-    setTimeout(function(){if(rw)rw.style.borderLeftColor='';},2000);
-    toast('Lütfen etkinlik kurallarını onaylayın');return;
-  }
+  var count=counts[id]||1;
+  var chk=document.getElementById(P+'-check-'+id);
+  if(e.rules&&chk&&!chk.checked){if(onRulesFail)onRulesFail(chk);toast('Lütfen etkinlik kurallarını onaylayın');return;}
   var access=canAccess(e);
   if(!access.allowed&&access.reason!=='members_only'){
     if(access.canWaitlist){await joinWaitlist(e.id);return;}
     toast({trust_too_low:'Güven skorunuz yetersiz',tier_insufficient:'Üyelik seviyeniz yetersiz',full:'Kapasite doldu'}[access.reason]||'Erişim yok');return;
   }
   var guestNames=[];
-  for(var gi=1;gi<count;gi++){var gInp=document.getElementById('ri-guest-'+id+'-'+gi);if(gInp){var gv=gInp.value.trim();if(!gv){toast(gi+'. misafirin adını girin');return;}guestNames.push(gv);}}
-  setLoading('ri-btn-'+id,'ri-btntxt-'+id,t('resBtn'),true);
+  for(var gi=1;gi<count;gi++){var gInp=document.getElementById(P+'-guest-'+id+'-'+gi);if(gInp){var gv=gInp.value.trim();if(!gv){toast(gi+'. misafirin adını girin');return;}guestNames.push(gv);}}
+  setLoading(P+'-btn-'+id,P+'-btntxt-'+id,t('resBtn'),true);
   var qrId='NIP-'+randomHex(8).toUpperCase();
   var insertData={qr_id:qrId,event_id:id,event_name:e.name,event_date:e.date,event_time:e.time||'',name:name,phone:phone,guest_count:count,guest_names:guestNames,status:'pending',rules_accepted:chk?chk.checked:false};
   if(!isGuest&&State.session)insertData.profile_id=State.session.user.id;
   var ins=await _SB.from('reservations').insert(insertData).select().single();
-  setLoading('ri-btn-'+id,'ri-btntxt-'+id,t('resBtn'),false);
+  setLoading(P+'-btn-'+id,P+'-btntxt-'+id,t('resBtn'),false);
   if(ins.error){if(ins.error.code==='23505')toast('Bu etkinliğe zaten kayıt yaptırdınız');else toast('Hata: '+ins.error.message);return;}
   toast('Rezervasyon talebiniz alındı ✓');
-  // Close panel
-  var panel=document.getElementById('ri-'+id);if(panel){panel.classList.remove('open');setTimeout(function(){panel.innerHTML='';},400);}
-  _rilCounts[id]=1;
+  counts[id]=1;
+  if(onSuccess)onSuccess();
   if(!isGuest){G('s-tickets');openTickets();}
+}
+
+async function doResInline(id){
+  return _submitReservation(id,'ri',_rilCounts,function(chk){
+    var rw=chk.closest('[style]');if(rw){rw.style.borderLeftColor='var(--red)';setTimeout(function(){rw.style.borderLeftColor='';},2000);}
+  },function(){
+    var panel=document.getElementById('ri-'+id);if(panel){panel.classList.remove('open');setTimeout(function(){panel.innerHTML='';},400);}
+  });
 }
 
 function showMembersOnlyModal(e){
@@ -1731,7 +1735,7 @@ function renderMemberCards(list,cid){
 }
 
 function setMC(el2,s){document.querySelectorAll('#mChips .chip').forEach(function(c){c.classList.remove('active');});el2.classList.add('active');State.memberFilter=s;renderM();}
-async function approveMember(id,cid){_adminCardFlash(id,'✓ ONAYLANDI','a');var code='NIP-MBR-'+randomHex(6).toUpperCase();var refCode='NIP-REF-'+randomHex(6).toUpperCase();await _SB.from('profiles').update({status:'approved',member_code:code,referral_code:refCode,approved_at:new Date().toISOString()}).eq('id',id);await _SB.from('reputation_ledger').insert({profile_id:id,score_type:'trust',delta:100,balance_after:100,reason_code:'approved',source_type:'admin'}).catch(function(){});toast('Onaylandı → '+code);if(cid==='recM'){renderRecM();renderAdminStats();}else{renderMStats();renderM();renderAdminStats();}}
+async function approveMember(id,cid){_adminCardFlash(id,'✓ ONAYLANDI','a');var code='NIP-MBR-'+randomHex(6).toUpperCase();var refCode='NIP-REF-'+randomHex(6).toUpperCase();await _SB.from('profiles').update({status:'approved',member_code:code,referral_code:refCode,approved_at:new Date().toISOString()}).eq('id',id);await _SB.from('reputation_ledger').insert({profile_id:id,score_type:'trust',delta:100,balance_after:100,reason_code:'approved',source_type:'admin'}).catch(function(e){console.error('NIP DB error:',e);});toast('Onaylandı → '+code);if(cid==='recM'){renderRecM();renderAdminStats();}else{renderMStats();renderM();renderAdminStats();}}
 async function rejectMember(id,cid){_adminCardFlash(id,'✕ REDDEDİLDİ','r');await _SB.from('profiles').update({status:'rejected'}).eq('id',id);toast('Reddedildi');if(cid==='recM'){renderRecM();renderAdminStats();}else{renderMStats();renderM();renderAdminStats();}}
 function adminEditMember(id,phone){
   var cc='+90',num=phone;var mx=phone.match(/^(\+90|\+7|\+1|\+44|\+49)(\d+)$/);if(mx){cc=mx[1];num=mx[2];}
@@ -1756,13 +1760,13 @@ async function adminSaveEdit(id){
   var num=(document.getElementById('admPh')?document.getElementById('admPh').value:'').trim().replace(/^0+/,'');
   var pw=document.getElementById('admPwEd')?document.getElementById('admPwEd').value:'';
   if(num)await _SB.from('profiles').update({phone:cc+num}).eq('id',id);
-  if(pw&&pw.length>=6)await _SB.auth.admin.updateUserById(id,{password:pw}).catch(function(){});
+  if(pw&&pw.length>=6)await _SB.auth.admin.updateUserById(id,{password:pw}).catch(function(e){console.error('NIP DB error:',e);});
   var ov=document.getElementById('admEov');if(ov)ov.remove();
   toast('Güncellendi ✓');renderM();
 }
 async function freezeMember(id,cid){_adminCardFlash(id,'❄ DONDURULDU','f');await _SB.from('profiles').update({status:'frozen'}).eq('id',id);toast('Donduruldu ❄');if(cid==='recM'){renderRecM();}else{renderMStats();renderM();}}
 async function deleteMember(id,name,cid){if(!confirm(name+' kalıcı olarak silinsin mi?'))return;await _SB.from('profiles').delete().eq('id',id);toast(name+' silindi.');if(cid==='recM'){renderRecM();renderAdminStats();}else{renderMStats();renderM();renderAdminStats();}}
-async function adjRep(profileId,type,delta,cid){var pRes=await _SB.from('profiles').select('trust_score,loyalty_score').eq('id',profileId).single();if(!pRes.data)return;var cur=type==='trust'?pRes.data.trust_score:pRes.data.loyalty_score;var newVal=Math.max(0,cur+delta);var upd={};upd[type+'_score']=newVal;if(type==='trust')upd.tier=newVal>=1500?'elite':newVal>=600?'gold':newVal>=200?'silver':'bronze';await _SB.from('profiles').update(upd).eq('id',profileId);await _SB.from('reputation_ledger').insert({profile_id:profileId,score_type:type,delta:delta,balance_after:newVal,reason_code:'admin_adjustment',source_type:'admin'}).catch(function(){});toast((delta>0?'+':'')+delta+' '+type);if(cid==='recM')renderRecM();else renderM();}
+async function adjRep(profileId,type,delta,cid){var pRes=await _SB.from('profiles').select('trust_score,loyalty_score').eq('id',profileId).single();if(!pRes.data)return;var cur=type==='trust'?pRes.data.trust_score:pRes.data.loyalty_score;var newVal=Math.max(0,cur+delta);var upd={};upd[type+'_score']=newVal;if(type==='trust')upd.tier=newVal>=1500?'elite':newVal>=600?'gold':newVal>=200?'silver':'bronze';await _SB.from('profiles').update(upd).eq('id',profileId);await _SB.from('reputation_ledger').insert({profile_id:profileId,score_type:type,delta:delta,balance_after:newVal,reason_code:'admin_adjustment',source_type:'admin'}).catch(function(e){console.error('NIP DB error:',e);});toast((delta>0?'+':'')+delta+' '+type);if(cid==='recM')renderRecM();else renderM();}
 
 // ═══ ADMIN EVENTS ═══
 async function renderEvts(){
@@ -1924,7 +1928,7 @@ async function scanQR(){
       var nT=(pd.trust_score||100)+tD+sB,nL=(pd.loyalty_score||0)+lD;
       var nTier=nT>=500?'elite':nT>=300?'gold':nT>=150?'silver':'bronze';
       await _SB.from('profiles').update({trust_score:nT,loyalty_score:nL,tier:nTier,total_attended:(pd.total_attended||0)+1,total_reservations:(pd.total_reservations||0)+1,attendance_streak:ns,max_streak:Math.max(pd.max_streak||0,ns),last_attended_at:new Date().toISOString()}).eq('id',r.profile_id);
-      await _SB.from('reputation_ledger').insert([{profile_id:r.profile_id,score_type:'trust',delta:tD+sB,balance_after:nT,reason_code:'attended'+(sB>0?'_streak':''),source_type:'event',source_id:r.event_id},{profile_id:r.profile_id,score_type:'loyalty',delta:lD,balance_after:nL,reason_code:'attended',source_type:'event',source_id:r.event_id}]).catch(function(){});
+      await _SB.from('reputation_ledger').insert([{profile_id:r.profile_id,score_type:'trust',delta:tD+sB,balance_after:nT,reason_code:'attended'+(sB>0?'_streak':''),source_type:'event',source_id:r.event_id},{profile_id:r.profile_id,score_type:'loyalty',delta:lD,balance_after:nL,reason_code:'attended',source_type:'event',source_id:r.event_id}]).catch(function(e){console.error('NIP DB error:',e);});
       if(ns>=2)streakMsg='<div class="checkin-streak">'+ns+' GECELIK SERI</div>';
       var tc=TIER_COLORS[nTier||'bronze'];var tl=(TIER_LABELS.tr)[nTier||'bronze']||'';
       res2.className='qr-res v';
@@ -1993,34 +1997,7 @@ function cfChg(id,d){
 }
 
 async function doResCal(id){
-  var e=State.events.find(function(x){return x.id===id;});if(!e)return;
-  var isGuest=!State.session||!State.profile||State.profile.status!=='approved';
-  var name=(document.getElementById('cf-name-'+id)||{}).value||'';name=name.trim();
-  var cc=(document.getElementById('cf-cc-'+id)||{}).value||'+90';
-  var num=(document.getElementById('cf-phone-'+id)||{}).value||'';num=num.trim();
-  var phone=num?(cc+num):'';
-  if(!name){toast('İsim zorunludur');return;}
-  if(!phone){toast('Telefon zorunludur');return;}
-  var count=_cfCounts[id]||1;
-  var chk=document.getElementById('cf-check-'+id);
-  if(e.rules&&chk&&!chk.checked){toast('Lütfen etkinlik kurallarını onaylayın');return;}
-  var access=canAccess(e);
-  if(!access.allowed&&access.reason!=='members_only'){
-    if(access.canWaitlist){await joinWaitlist(e.id);return;}
-    toast({trust_too_low:'Güven skorunuz yetersiz',tier_insufficient:'Üyelik seviyeniz yetersiz',full:'Kapasite doldu'}[access.reason]||'Erişim yok');return;
-  }
-  var guestNames=[];
-  for(var gi=1;gi<count;gi++){var gInp=document.getElementById('cf-guest-'+id+'-'+gi);if(gInp){var gv=gInp.value.trim();if(!gv){toast(gi+'. misafirin adını girin');return;}guestNames.push(gv);}}
-  setLoading('cf-btn-'+id,'cf-btntxt-'+id,t('resBtn'),true);
-  var qrId='NIP-'+randomHex(8).toUpperCase();
-  var insertData={qr_id:qrId,event_id:id,event_name:e.name,event_date:e.date,event_time:e.time||'',name:name,phone:phone,guest_count:count,guest_names:guestNames,status:'pending',rules_accepted:chk?chk.checked:false};
-  if(!isGuest&&State.session)insertData.profile_id=State.session.user.id;
-  var ins=await _SB.from('reservations').insert(insertData).select().single();
-  setLoading('cf-btn-'+id,'cf-btntxt-'+id,t('resBtn'),false);
-  if(ins.error){if(ins.error.code==='23505')toast('Bu etkinliğe zaten kayıt yaptırdınız');else toast('Hata: '+ins.error.message);return;}
-  toast('Rezervasyon talebiniz alındı ✓');
-  _cfCounts[id]=1;
-  if(!isGuest){G('s-tickets');openTickets();}
+  return _submitReservation(id,'cf',_cfCounts);
 }
 
 // ═══ ADMIN CARD INSTANT FLASH ═══
