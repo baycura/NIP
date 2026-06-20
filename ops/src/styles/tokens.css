@@ -1,0 +1,58 @@
+/*
+ * NIP design tokens — the ONLY place raw colors/fonts/spacing live.
+ * The cold/editorial NIP aesthetic is layered later (Claude Design) by
+ * overriding these variables. Components must reference var(--token), never
+ * hard-coded values, so the visual layer can be swapped without touching JSX.
+ */
+:root {
+  /* surfaces & ink */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f5f5;
+  --color-ink: #0a0a0a;
+  --color-ink-muted: #666666;
+  --color-border: rgba(0, 0, 0, 0.14);
+  --color-border-strong: rgba(0, 0, 0, 0.28);
+
+  /* accents (semantic — neutral by default, themed later) */
+  --color-accent: #0a0a0a;
+  --color-accent-ink: #ffffff;
+  --color-danger: #b00020;
+  --color-warning: #8a6d00;
+  --color-success: #0a6b3c;
+
+  /* typography */
+  --font-sans: "DM Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 24px;
+  --lh: 1.4;
+
+  /* spacing scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* radius / control sizing — generous touch targets (mobile-first) */
+  --radius: 0px;
+  --control-h: 48px;
+  --tap-min: 44px;
+
+  /* layout */
+  --nav-h: 60px;
+  --header-h: 56px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* z layers */
+  --z-header: 50;
+  --z-nav: 60;
+  --z-modal: 100;
+}
