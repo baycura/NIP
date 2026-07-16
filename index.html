@@ -1015,7 +1015,7 @@ async function doRegister(){
   var phoneCC=val('regPhoneCC')||'+90',phoneNum=val('regPhone').trim().replace(/^0+/,''),phone=phoneNum?(phoneCC+phoneNum):'';
   var refCode=val('refInput').toUpperCase().trim();
   setErr('regErr','');
-  if(!name||!email||!pw||!phone){setErr('regErr',t('errFields'));return;}
+  if(!name||!email||!pw||!phone||!insta){setErr('regErr',t('errFields'));return;}
   if(pw.length<8){setErr('regErr',t('errPw'));return;}
   if(refCode&&!_refProfile){setErr('regErr','Geçersiz referans kodu');return;}
   setLoading('regBtn','regBtnTxt',t('applyBtn'),true);
@@ -1029,6 +1029,7 @@ async function doCompleteProfile(){
   var cpCC=val('cpPhoneCC')||'+90',cpNum=val('cpPhone').trim(),phone=cpNum?(cpCC+cpNum):'',insta=val('cpInsta').trim(),refCode=val('cpRef').toUpperCase().trim();
   setErr('cpErr','');
   if(!phone){setErr('cpErr','Telefon numarası zorunludur');return;}
+  if(!insta){setErr('cpErr','Instagram zorunludur');return;}
   setLoading('cpBtn','cpBtnTxt','BAŞVURUYU GÖNDER',true);
   // Onay/üyelik kodu/referans ARTIK server-side RPC ile verilir; client kendini
   // "approved" yapamaz (privilege-escalation engellendi).

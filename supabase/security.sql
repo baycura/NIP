@@ -245,6 +245,14 @@ begin
     raise exception 'oturum yok';
   end if;
 
+  -- Üyelik için telefon ve instagram zorunlu (client atlansa bile engelle)
+  if p_phone is null or length(trim(p_phone)) = 0 then
+    raise exception 'telefon zorunludur';
+  end if;
+  if p_instagram is null or length(trim(p_instagram)) = 0 then
+    raise exception 'instagram zorunludur';
+  end if;
+
   -- korunan-kolon trigger'ını bu kontrollü işlem için aç
   perform set_config('app.guard_off', '1', true);
 
